@@ -1,0 +1,93 @@
+services:
+  soc-xpert:
+    build: .
+    image: sec4data/soc-xpert:1.0
+    container_name: soc-xpert
+    ports:
+      - "${PORT:-4000}:4000"
+      # Syslog das firewalls: o host recebe em 514 (padrão) e encaminha para 5514.
+      # Aponte as firewalls para o IP deste host, porta 514 UDP (ou TCP).
+      - "${SYSLOG_HOST_PORT:-514}:5514/udp"
+      - "${SYSLOG_HOST_PORT:-514}:5514/tcp"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "4000"
+      NODE_ENV: "${NODE_ENV:-production}"
+      # DEMO_MODE=true → dados simulados (arranca out-of-the-box).
+      # Coloca DEMO_MODE=false no .env quando ligares conectores reais.
+      DEMO_MODE: "${DEMO_MODE:-true}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-*}"
+      # ── Autenticação (03.2) ──
+      AUTH_REQUIRED: "${AUTH_REQUIRED:-false}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      SESSION_TTL_HOURS: "${SESSION_TTL_HOURS:-12}"
+      TRUST_PROXY: "${TRUST_PROXY:-1}"
+
+      # ── Fase 03 · base de dados e identidade ──
+      DATABASE_URL: "postgresql://socx:${POSTGRES_PASSWORD:-socx}@db:5432/socxpert?schema=public"
+      APP_ENCRYPTION_KEY: "${APP_ENCRYPTION_KEY:-troca-esta-chave-por-uma-de-32-bytes}"
+      DEFAULT_TENANT_SLUG: "${DEFAULT_TENANT_SLUG:-sec4data}"
+      DEFAULT_TENANT_NAME: "${DEFAULT_TENANT_NAME:-Sec4data}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@sec4data.com}"
+      ADMIN_NAME: "${ADMIN_NAME:-Administrador}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      RUN_SEED: "${RUN_SEED:-true}"
+
+      # ── Wazuh ──
+      WAZUH_API_URL: "${WAZUH_API_URL:-}"
+      WAZUH_API_USER: "${WAZUH_API_USER:-}"
+      WAZUH_API_PASSWORD: "${WAZUH_API_PASSWORD:-}"
+      WAZUH_INDEXER_URL: "${WAZUH_INDEXER_URL:-}"
+      WAZUH_INDEXER_USER: "${WAZUH_INDEXER_USER:-}"
+      WAZUH_INDEXER_PASSWORD: "${WAZUH_INDEXER_PASSWORD:-}"
+      WAZUH_ALERTS_INDEX: "${WAZUH_ALERTS_INDEX:-wazuh-alerts-*}"
+      WAZUH_INSECURE_TLS: "${WAZUH_INSECURE_TLS:-true}"
+
+      # ── MISP ──
+      MISP_URL: "${MISP_URL:-}"
+      MISP_API_KEY: "${MISP_API_KEY:-}"
+      MISP_INSECURE_TLS: "${MISP_INSECURE_TLS:-true}"
+
+      # ── TheHive ──
+      THEHIVE_URL: "${THEHIVE_URL:-}"
+      THEHIVE_API_KEY: "${THEHIVE_API_KEY:-}"
+      THEHIVE_INSECURE_TLS: "${THEHIVE_INSECURE_TLS:-true}"
+
+      # ── Copilot (Anthropic) ──
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      ANTHROPIC_MODEL: "${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+
+      # ── Ingestão de syslog das firewalls ──
+      SYSLOG_ENABLED: "${SYSLOG_ENABLED:-true}"
+      SYSLOG_UDP: "${SYSLOG_UDP:-true}"
+      SYSLOG_TCP: "${SYSLOG_TCP:-true}"
+      SYSLOG_UDP_PORT: "5514"
+      SYSLOG_TCP_PORT: "5514"
+      SYSLOG_MAX_EVENTS: "${SYSLOG_MAX_EVENTS:-2000}"
+      SYSLOG_TENANT_MAP: "${SYSLOG_TENANT_MAP:-}"
+
+      # ── Webhook de entrada (integração universal) ──
+      WEBHOOK_TOKEN: "${WEBHOOK_TOKEN:-}"
+      WEBHOOK_MAX_EVENTS: "${WEBHOOK_MAX_EVENTS:-2000}"
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: soc-xpert-db
+    environment:
+      POSTGRES_USER: socx
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-socx}"
+      POSTGRES_DB: socxpert
+    volumes:
+      - soc-xpert-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U socx -d socxpert"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  soc-xpert-db:
